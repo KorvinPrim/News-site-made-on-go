@@ -1,0 +1,14 @@
+{{define "not_filled_data"}}
+
+{{template "header"}}
+
+<main role="main" class="inner cover">
+  <h1 class="cover-heading">Не все данные заполнены</h1>
+  <form action="/create" method="post">
+    <button class="btn btn-warning">Вернуться назад</button>
+  </form>
+</main>
+
+{{template "footer"}}
+
+{{end}}

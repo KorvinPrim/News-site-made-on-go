@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	_ "database/sql"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql" //go get -u github.com/go-sql-driver/mysql
+	"github.com/gorilla/mux"
+	_ "github.com/gorilla/mux" //go get -u github.com/gorilla/mux
 	"html/template"
 	"net/http"
 	"path/filepath"
@@ -18,6 +20,7 @@ type Article struct {
 }
 
 var posts = []Article{}
+var showPosts = Article{}
 
 func index(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles(
@@ -119,13 +122,53 @@ func not_filled_data(w http.ResponseWriter, r *http.Request) {
 	t.ExecuteTemplate(w, "not_filled_data", nil)
 }
 
-func handleFunc() {
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-	http.HandleFunc("/", index)
-	http.HandleFunc("/create", create)
-	http.HandleFunc("/not_filled_data", not_filled_data)
-	http.HandleFunc("/save_article", save_article)
+func show_post(w http.ResponseWriter, r *http.Request) {
+	t, err := template.ParseFiles(
+		filepath.Join("templates", "show.html"),
+		filepath.Join("templates", "header.html"),
+		filepath.Join("templates", "footer.html"))
 
+	vars := mux.Vars(r)
+
+	db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/golang")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	res, err := db.Query(fmt.Sprintf("SELECT * FROM articles WHERE id = '%s'", vars["post_id"]))
+	if err != nil {
+		panic(err)
+	}
+
+	showPosts = Article{}
+	for res.Next() {
+		var post Article
+		err = res.Scan(&post.Id, &post.Title, &post.Anons, &post.FullText)
+		if err != nil {
+			panic(err)
+		}
+
+		showPosts = post
+	}
+
+	t.ExecuteTemplate(w, "show_block", showPosts)
+
+}
+
+func handleFunc() {
+	//Enabling address processing via gorilla mux
+	rtr := mux.NewRouter()
+	rtr.HandleFunc("/", index).Methods("GET")
+	rtr.HandleFunc("/create", create).Methods("GET", "POST")
+	rtr.HandleFunc("/not_filled_data", not_filled_data).Methods("GET")
+	rtr.HandleFunc("/save_article", save_article).Methods("POST")
+
+	//the ending can only accept numbers from 0-9 and there can be several of them
+	rtr.HandleFunc("/post/{post_id:[0-9]+}", show_post).Methods("GET", "POST")
+
+	http.Handle("/", rtr)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	http.ListenAndServe(":8080", nil)
 }
 
